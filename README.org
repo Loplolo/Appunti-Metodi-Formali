@@ -1,8 +1,6 @@
 #+TITLE: Appunti Metodi Formali
 #+AUTHOR: lopl
 
-* Descrizione
-
 Appunti per il corso di Metodi Formali (Prof. Momigliano) - Università degli Studi di Milano, A.A. 2025/2026.
 
 Seguono i primi capitoli di [[https://softwarefoundations.cis.upenn.edu/][Software Foundations]] con aggiunte dal corso, qualche semplificazione e considerazione.
