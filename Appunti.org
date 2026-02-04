@@ -367,9 +367,9 @@ Definiamo una funzione che calcola la parità di un numero naturale
 #+begin_src  coq :session *coq*
 Fixpoint even (n:nat) : bool :=
     match n with
-    | O ⇒ true
-    | S O ⇒ false
-    | S (S n') ⇒ even n'
+    | O => true
+    | S O => false
+    | S (S n') => even n'
     end.
 #+end_src
 
@@ -391,29 +391,29 @@ Naturalmente possiamo anche avere più argomenti in queste funzioni e per sempli
   Module NatPlayground2.
   Fixpoint plus (n : nat) (m : nat) : nat :=
      match n with
-     | O ⇒ m
-     | S n' ⇒ S (plus n' m)
+     | O => m
+     | S n' => S (plus n' m)
      end.
   Fixpoint mult (n m : nat) : nat :=
      match n with
-     | O ⇒ O
-     | S n' ⇒ plus m (mult n' m)
+     | O => O
+     | S n' => plus m (mult n' m)
      end.
   Example test_mult1: (mult 3 3) = 9.
      Proof. simpl. reflexivity. Qed.
 
   Fixpoint minus (n m:nat) : nat :=
      match n, m with
-     | O , _ ⇒ O
-     | S _ , O ⇒ n
-     | S n', S m' ⇒ minus n' m'
+     | O , _ => O
+     | S _ , O => n
+     | S n', S m' => minus n' m'
      end.
    End NatPlayground2.
 
    Fixpoint exp (base power : nat) : nat :=
      match power with
-     | O ⇒ S O
-     | S p ⇒ mult base (exp base p)
+     | O => S O
+     | S p => mult base (exp base p)
      end.
  #+end_src
 
@@ -434,13 +434,13 @@ Rocq è così semplice che non ci viene dato nulla, nemmeno controllare l'uguagl
 #+begin_src coq :session *coq*
 Fixpoint eqb (n m : nat) : bool :=
   match n with
-  | O ⇒ match m with
-         | O ⇒ true
-         | S m' ⇒ false
+  | O => match m with
+         | O => true
+         | S m' => false
          end
-  | S n' ⇒ match m with
-            | O ⇒ false
-            | S m' ⇒ eqb n' m'
+  | S n' => match m with
+            | O => false
+            | S m' => eqb n' m'
             end
   end.
 #+end_src
@@ -450,11 +450,11 @@ O la comparazione tra numeri
 #+begin_src coq :session *coq*
 Fixpoint leb (n m : nat) : bool :=
   match n with
-  | O ⇒ true
-  | S n' ⇒
+  | O => true
+  | S n' =>
       match m with
-      | O ⇒ false
-      | S m' ⇒ leb n' m'
+      | O => false
+      | S m' => leb n' m'
       end
   end.
 
@@ -613,4 +613,154 @@ Abort.
 
 Abbiamo usato ~Abort~ per dire a Rocq che al momento ci arrendiamo al dimostrare questo teorema. Al contrario di ~Admitted~ ci impedisce di utilizzare questo teorema in successive dimostrazioni (non lo stiamo ammettendo).
 
-Il motivo per cui la dimostrazione rimane bloccata è che 
+Il motivo per cui la dimostrazione rimane bloccata è che sia eqb che + iniziano provando a fare matching sul primo argomento, ma il primo argomento di + è un valore sconosciuto e l'argomento di eqb è l'espressione composta n + 1.
+
+Per poter continuare dobbiamo quindi chiederci quali sono le forme che può avere n, separatamente, per casi.
+- Se n è 0 allora (n + 1) =? 0 non può essere vera
+- Se n è un'espression S n' per qualche n' allora sapendo che *almeno* ha davanti un *S* è il successore di qualcosa, pur non sapendo che cosa questo "qualcosa" sia possiamo dire per certo che sommando 1 non otteniamo 0 e quindi l'affermazione è comunque falsa.
+
+La tattica che si usa in Rocq per distinguere questi casi è ~destruct~.
+
+#+begin_src coq :session *coq*
+Theorem plus_1_neq_0 : forall n : nat,
+  (n + 1) =? 0 = false.
+Proof.
+  intros n. destruct n as [| n'] eqn:E.
+  - reflexivity.
+  - reflexivity. Qed.
+#+end_src
+
+La tattica ~destruct~ ha generato in questo esempio due *casi*, o sotto-goal, per semplicità possiamo racchiudere questi sotto-goal con delle liste puntate, in modo tale da distringuere facilmente i due *scope* tramite una notazione a *bullet*. Ogni bullet è da dimostrare separatamente dall'altro per questo diciamo che sono *scopi* differenti.
+
+Se non inseriamo la notazione a bullet Rocq si aspetta che dimostriamo ogni subgoal in sequenza uno alla volta, ma è buona norma inserirli per migliorare la leggibilità, soprattutto quando ogni sottogoal inizia a sua volta ad avere altri sottogoal.
+
+La notazione `as [| n']` invece è chiamata =intro pattern=, dice a Rocq i nomi di variabile da introdurre per ogni sottogoal. In generale tra le parentesi quadre viene inserita una /lista di liste/ di nomi, separati da |. In questo caso il primo componente è vuoto *siccome il costruttore O non prende argomenti*, mentre siccome *S* è un operatore unario diamo come nome del suo argomento n'.
+
+In ogni sottogoal Rocq si ricorda l'assunzione riguardante n inerente a quel sottogoal, ovvero il fatto che o n = O oppure n = S n' per qualche n'. l'annotazione eqn:E dice alla destruct di dare il nome E a questa equazione.
+
+*ATTENZIONE*: Se viene omesso eqn:E Rocq ignora questa assunzione nei sottogoal, mentre questo può essere utile in alcuni casi (ad esempio in dimostrazioni in cui queste assunzioni non sono utili) è sempre buona pratica metterlo.
+ 
+La tattica ~destruct~ può essere utilizzata con ogni tipo di dato definito induttivamente. Nell'esempio viene dimostrata l'involuzione della negazione. (la negazione è la sua inversa)
+
+#+begin_src  coq :session *coq*
+ Theorem negb_involutive : forall b : bool,
+  negb (negb b) = b.
+Proof.
+  intros b. destruct b eqn:E.
+  - reflexivity.
+  - reflexivity. Qed.
+#+end_src
+
+Notare che siccome nessun sottocaso ha bisogno di associare variabili non vengono specificati nomi. Inoltre, se non specifichiamo i nomi in qualunque destruct Rocq si occuperà di inventarseli, generalmente è da evitare.
+
+Un esempio in cui abbiamo subgoal che a loro volta generano subgoal
+
+#+begin_src coq :session *coq*
+Theorem andb_commutative : forall b c, andb b c = andb c b.
+Proof.
+  intros b c. destruct b eqn:Eb.
+  - destruct c eqn:Ec.
+    + reflexivity.
+    + reflexivity.
+  - destruct c eqn:Ec.
+    + reflexivity.
+    + reflexivity.
+Qed.
+#+end_src
+
+Come *bullet* si possono usare -, + e ogni sequenza di asterischi \*\*\*. Oppure in alternativa delle parentesi graffe.
+Ed è possibile combinarli insieme in base alla preferenza.
+
+#+begin_src coq :session *coq*
+Theorem andb_commutative' : forall b c, andb b c = andb c b.
+Proof.
+  intros b c. destruct b eqn:Eb.
+  { destruct c eqn:Ec.
+    { reflexivity. }
+    { reflexivity. } }
+  { destruct c eqn:Ec.
+    { reflexivity. }
+    { reflexivity. } }
+Qed.
+
+Theorem andb3_exchange :
+  forall b c d, andb (andb b c) d = andb (andb b d) c.
+Proof.
+  intros b c d. destruct b eqn:Eb.
+  - destruct c eqn:Ec.
+    { destruct d eqn:Ed.
+      - reflexivity.
+      - reflexivity. }
+    { destruct d eqn:Ed.
+      - reflexivity.
+      - reflexivity. }
+  - destruct c eqn:Ec.
+    { destruct d eqn:Ed.
+      - reflexivity.
+      - reflexivity. }
+    { destruct d eqn:Ed.
+      - reflexivity.
+      - reflexivity. }
+Qed.
+#+end_src
+
+Un'ultima nota che aggiunge il libro, siccome spesso le dimostrazioni fanno analisi per casi su variabili appena introdotte, Rocq aggiunge una comodità.
+
+Invece di 
+
+#+begin_src  coq
+intros x y. destruct y as [|y] eqn:E.
+#+end_src
+
+Possiamo introdurre il pattern direttamente in ~intros~
+
+#+begin_src coq :session *coq*
+Theorem plus_1_neq_0' : forall n : nat,
+  (n + 1) =? 0 = false.
+Proof.
+  intros [|n].
+  - reflexivity.
+  - reflexivity. Qed.
+#+end_src
+
+E se non ci sono costruttori possiamo direttamente usare [] per iniziare l'analisi per casi direttamente.
+
+#+begin_src coq :session *coq*
+Theorem andb_commutative'' :
+  forall b c, andb b c = andb c b.
+Proof.
+  intros [] [].
+  - reflexivity.
+  - reflexivity.
+  - reflexivity.
+  - reflexivity.
+Qed.
+#+end_src
+
+Alcune note veloci sui sottocapitoli "opzionali"
+
+#+begin_src coq :session *coq*
+ Notation "x + y" := (plus x y)
+                       (at level 50, left associativity)
+                       : nat_scope.
+Notation "x * y" := (mult x y)
+                       (at level 40, left associativity)
+                       : nat_scope.
+#+end_src
+
+Qui level indica il livello di precedenza dell'operatore per disambiguare casi come 1+2*3*4 e dare precedenza agli operatori. Alcuni valori che può usare sono da 0 a 100, left, right, o no associativity.
+Invece nat_scope serve ad aiutare Rocq a capire lo scopo dell'operatore dal contesto, quando vede S (O * O) capisce che è nat_scope mentre se dovesse vedere una coppia bool*bool allora indovinerebbe type_scope. Spesso il contesto della notazione è ambiguo e va aiutato come nel caso (x×y)%nat.
+
+#+begin_src coq :session *coq*
+  Fixpoint plus' (n : nat) (m : nat) : nat :=
+    match n with
+    | O => m
+    | S n' => S (plus' n' m)
+    end.
+#+end_src
+
+In questa notazione della somma Rocq si rende conto che plus` "decresce sul primo argomento" questo significa che sta eseguendo una "ricorsione strutturale" sull'argomento n. Ovvero esegue chiamate di funzione solo su valori strettamente più piccoli di n, in questo modo si assicura che la funzione ricorsiva eventualmente termina (in Rocq è garantito che ogni funzione termina). Ogni definizione ~Fixpoint~ in Rocq deve essere /decrescente/ in questa maniera. Il problema è che l'analisi che fa Rocq per comprendere se queste funzioni sono decrescenti non è molto sofisticata spesso bisogna riscrivere le funzioni in maniera poco intuitiva.
+
+* Induzione
+
+
