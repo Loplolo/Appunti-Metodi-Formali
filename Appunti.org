@@ -751,4 +751,351 @@ In questa notazione della somma Rocq si rende conto che plus` "decresce sul prim
 
 * Induzione
 
+#TODO: Riscrivere
+
+* Liste
+
+#+begin_src coq :session *coq*
+From LF Require Export Induction.
+Module NatList.
+#+end_src
+
+Nel definire tipi induttivamente ogni costruttore può prendere un numero diverso di argomenti, nessuno (come 0 o true), uno (come S) o di più (come nibble e quello di seguito)
+
+#+begin_src coq :session *coq*
+Inductive natprod : Type :=
+  | pair (n1 n2 : nat).
+#+end_src
+
+Che si può leggere come "L'unico modo per costruire una coppia di numeri naturali è applicando ~pair~ a due argomenti di tipo nat.
+
+#+begin_src coq :session *coq*
+Check (pair 3 5) : natprod.
+#+end_src
+
+Tramite pattern matching possiamo definire funzioni che estraggono il primo o il secondo elemento
+
+#+begin_src coq :session *coq*
+Definition fst (p : natprod) : nat :=
+  match p with
+  | pair x y => x
+  end.
+
+Definition snd (p : natprod) : nat :=
+  match p with
+  | pair x y => y
+  end.
+Compute (fst (pair 3 5)).
+  (* ===> 3 *)
+#+end_src
+
+Siccome useremo spesso questo tipo di ~pair~ conviene definire una notazione più comoda.
+
+#+begin_src coq :session *coq*
+Notation "( x , y )" := (pair x y).
+#+end_src
+
+Questa notazione si può usare *sia nelle espressioni che nel pattern matching*:
+#+begin_src coq :session *coq*
+Compute (fst (3,5)).
+
+Definition fst' (p : natprod) : nat :=
+  match p with
+  | (x,y) => x
+  end.
+
+Definition snd' (p : natprod) : nat :=
+  match p with
+  | (x,y) => y
+  end.
+
+Definition swap_pair (p : natprod) : natprod :=
+  match p with
+  | (x,y) => (y,x)
+  end.
+#+end_src
+
+Una nota che indica il libro è di non confondere questa notazione con la sintassi senza parentesi dei pattern multipli come ad esempio.
+
+#+begin_src coq :session *coq*
+Fixpoint minus (n m : nat) : nat :=
+  match n, m with
+  | O   , _    => O
+  | S _ , O    => n
+  | S n', S m' => minus n' m'
+  end.
+#+end_src
+
+La distinzione è minima ma da notare, in questi esempi errato viene presentata meglio.
+
+#+begin_src coq :session *coq*
+(* Can't match on a pair with multiple patterns: *)
+Definition bad_fst (p : natprod) : nat :=
+  match p with
+  | x, y => x
+  end.
+
+(* Can't match on multiple values with pair patterns: *)
+Definition bad_minus (n m : nat) : nat :=
+  match n, m with
+  | (O   , _   ) => O
+  | (S _ , O   ) => n
+  | (S n', S m') => bad_minus n' m'
+  end.
+#+end_src
+
+ If we state properties of pairs in a slightly peculiar way, we can sometimes complete their proofs with just reflexivity and its built-in simplification:
+
+ Spesso possiamo completare le dimostrazioni sulle coppie usando solo la riflessività e le semplificazioni automatiche. Ma se scriviamo il lemma in maniera più naturale la semplificazione non basta.
+ 
+#+begin_src coq :session *coq*
+Theorem surjective_pairing' : forall (n m : nat),
+  (n,m) = (fst (n,m), snd (n,m)).
+Proof.
+  reflexivity. Qed.
+
+Theorem surjective_pairing_stuck : forall (p : natprod),
+  p = (fst p, snd p).
+Proof.
+  simpl. (* Doesn't reduce anything! *)
+Abort.
+#+end_src
+
+Esponendo la struttura di ~p~ allora ~simpl~ può fare pattern matching  in ~fst~ e ~snd~. Per fare questo usiamo una ~destruct~.
+
+#+begin_src coq :session *coq*
+Theorem surjective_pairing : forall (p : natprod),
+  p = (fst p, snd p).
+Proof.
+  intros p. destruct p as [n m]. simpl. reflexivity. Qed.
+#+end_src
+
+** Liste di numeri
+
+Possiamo definire una /lista/ di /numeri/ come:
+- Una lista vuota
+- Una coppia tra un /numero naturale/ e una /lista/.
+Per chi conosce Lisp/Scheme questo pattern risulta molto famigliare.
+
+ #+begin_src coq :session *coq*
+Inductive natlist : Type :=
+  | nil
+  | cons (n : nat) (l : natlist).
+ #+end_src
+
+ Un esempio di utilizzo:
+
+ #+begin_src coq :session *coq*
+Definition mylist := cons 1 (cons 2 (cons 3 nil)).
+ #+end_src
+
+ Come nel caso precedente Rocq definisce una notazione comoda. Specificando l'*associatività a destra* per l'appendere un valore a una lista e una notazione comoda per le liste n-arie con le parentesi quadre.
+
+ #+begin_src coq :session *coq*
+Notation "x :: l" := (cons x l)
+                     (at level 60, right associativity).
+Notation "[ ]" := nil.
+Notation "[ x ; .. ; y ]" := (cons x .. (cons y nil) ..).
+ #+end_src
+
+ Tutte queste definizioni di esempio sono equivalenti. Con le parentesi è possibile vedere esplicitamente come funziona l'associatività a destra, ogni valore è accoppiato con il valore o l'espressione a destra.
+
+ #+begin_src coq :session *coq*
+Definition mylist1 := 1 :: (2 :: (3 :: nil)).
+Definition mylist2 := 1 :: 2 :: 3 :: nil.
+Definition mylist3 := [1 ; 2 ; 3].
+ #+end_src
+
+Nella notazione ~"x + y" := (plus x y) (at level 50, left associativity)~.
+L'operatore + sarà più *strettamente vincolato* di ~::~, quindi ~1 + 2 :: [3]~ verrà analizzato, come ci si aspetterebbe, come ~(1 + 2) :: [3]~ anziché ~1 + (2 :: [3])~.
+
+** Alcune Funzioni per manipolare liste
+
+La funzione ~repeat~ ritorna una lista di lunghezza count in cui ogni elemento è ~n~.
+
+#+begin_src coq :session *coq*
+Fixpoint repeat (n count : nat) : natlist :=
+  match count with
+  | O => nil
+  | S count' => n :: (repeat n count')
+  end.
+#+end_src
+
+La funzione  ~length~ calcola la lunghezza di una lista l
+
+#+begin_src coq :session *coq*
+Fixpoint length (l : natlist) : nat :=
+  match l with
+  | nil => O
+  | h :: t => S (length t)
+  end.
+#+end_src
+
+La funzione ~app~ (append) concatena tra loro due liste
+
+#+begin_src coq :session *coq*
+ Fixpoint app (l1 l2 : natlist) : natlist :=
+  match l1 with
+  | nil => l2
+  | h :: t => h :: (app t l2)
+  end.
+#+end_src
+
+Siccome è un operatore molto utilizzato è definita una notazione anche per ~app~ tramite ~++~. 
+
+#+begin_src coq :session *coq*
+ Notation "x ++ y" := (app x y) (right associativity, at level 60).
+
+Example test_app1: [1;2;3] ++ [4;5] = [1;2;3;4;5].
+  Proof. reflexivity. Qed.
+
+Example test_app2: nil ++ [4;5] = [4;5].
+  Proof. reflexivity. Qed.
+
+Example test_app3: [1;2;3] ++ nil = [1;2;3].
+  Proof. reflexivity. Qed.
+#+end_src
+
+Altre due funzioni utili sono ~hd~ e ~tl~ (*head* e *tail*) che ritornarno rispettivamente il primo elemento di una lista ed i restanti elementi (come in common lisp) siccome la lista vuota non ha elementi dobbiamo chiedere all'utente un elemento di =default= da ritornare in quel caso, questo perchè tutte le funzioni in Rocq devono essere totali.
+
+#+begin_src coq :session *coq*
+Definition hd (default : nat) (l : natlist) : nat :=
+  match l with
+  | nil ⇒ default
+  | h :: t ⇒ h
+  end.
+
+Definition tl (l : natlist) : natlist :=
+  match l with
+  | nil ⇒ nil
+  | h :: t ⇒ t
+  end.
+
+Example test_hd1: hd 0 [1;2;3] = 1.
+  Proof. reflexivity. Qed.
+Example test_hd2: hd 0 [] = 0.
+  Proof. reflexivity. Qed.
+Example test_tl: tl [1;2;3] = [2;3].
+  Proof. reflexivity. Qed.
+#+end_src
+
+** Reasoning su liste
+
+Spesso per provare fatti su funzioni che manipolano liste bastano ~simpl~ e ~reflexivity~ come ad esempio in:
+
+#+begin_src coq :session *coq*
+Theorem nil_app : forall l : natlist,
+  [] ++ l = l.
+Proof. reflexivity. Qed.
+#+end_src
+
+Siccome ~[]~ viene direttamente ridotta nel matching della definizione di ~app~.
+
+Come con i numeri naturali spesso è utile fare analisi per casi su le forme che possono avere le liste vuote o non vuote come in
+
+#+begin_src coq :session *coq*
+Theorem tl_length_pred : forall l:natlist,
+  pred (length l) = length (tl l).
+Proof.
+  intros l. destruct l as [| n l'].
+  - (* l = nil *)
+    reflexivity.
+  - (* l = cons n l' *)
+    reflexivity. Qed.
+#+end_src
+
+Qui, il caso nil funziona perché abbiamo scelto di definire tl nil = nil. Notiamo che l'annotazione ~as~ sulla tattica di ~destruct~ introduce due nomi , =n= e =l'= corrispondenti al fatto che il costruttore ~cons~ per le liste accetta due argomenti (la testa e la coda della lista che sta costruendo).
+Di solito, però, i teoremi interessanti sulle liste richiedono l'induzione per la loro dimostrazione. 
+
+** Induzione su liste
+
+L'induzione sui tipi di dati (come le liste) segue lo stesso principio dell'induzione sui numeri naturali. Poiché ogni insieme definito induttivamente è composto esclusivamente dai suoi costruttori (ad esempio, una lista può essere solo ~nil~ o il risultato di un ~cons~), per dimostrare che una proprietà =P= valga per tutti gli elementi è sufficiente:
+
+1.  **Caso base**: Dimostrare che =P= è vera per il costruttore più semplice (es. la lista vuota ~nil~).
+2.  **Passo induttivo**: Dimostrare che =P= è vera per una struttura composta (es. ~cons n l'~), assumendo come ipotesi che la proprietà sia già valida per la sottostruttura più piccola (=l'=).
+
+Poiché ogni elemento complesso può essere scomposto fino a raggiungere il caso base, questi due passaggi garantiscono che la proprietà sia valida per l'intero insieme.
+
+Vediamo un esempio
+
+#+begin_src coq :session *coq*
+Theorem app_assoc : forall l1 l2 l3 : natlist,
+  (l1 ++ l2) ++ l3 = l1 ++ (l2 ++ l3).
+Proof.
+  intros l1 l2 l3. induction l1 as [| n l1' IHl1'].
+  - (* l1 = nil *)
+    reflexivity.
+  - (* l1 = cons n l1' *)
+    simpl. rewrite → IHl1'. reflexivity. Qed.
+#+end_src
+
+Notiamo che come con i numeri naturali la clausola di ~as~ della tattica ~induction~ da un nome all'ipotesi di induzione corrispondente alla lista più piccola ~l1'~ del caso della =cons=.
+
+Il libro riporta una dimostrazione informale per colmare la difficoltà di leggere Rocq come documento statico invece che come dimostratore interattivo (queste note colmano comunque questa difficoltà).
+
+#+begin_example coq
+
+Teorema: Per ogni lista l1, l2, e l3, (l1 ++ l2) ++ l3 = l1 ++ (l2 ++ l3)
+
+Dimostrazione: Per induzione su l1.
+
+- Prima, supponiamo l1 = []. Dobbiamo mostrare che:
+
+                 ([] ++ l2) ++ l3 = [] ++ (l2 ++ l3)
+
+  il che segue direttamente dalla definizione di ++.
+
+- Poi, supponiamo l1 = n::l1' con
+
+                (l1' ++ l2) ++ l3 = l1' ++ (l2 ++ l3)  
+  
+  (l'ipotesi induttiva) Dobbiamo mostrare che
+  
+                ((n :: l1') ++ l2) ++ l3 = (n :: l1') ++ (l2 ++ l3)
+
+  Per la definizione di ++, ne consegue che
+
+                n :: ((l1' ++ l2) ++ l3) = n :: (l1' ++ (l2 ++ l3))
+
+che è immediato dall'ipotesi induttiva. ☐
+#+end_example
+
+** Assunzioni da Generalizzare
+
+Spesso in una dimostrazione è necessario generalizzare uno statement per completare una dimostrazione per induzione. L'intuizione è che un'assunzione più generale può portare ad un'ipotesi induttiva più forte. Se ci si sente bloccati in una dimostrazione potrebbe rivelarsi utile fare un passo indietro e vedere se si può dimostrare un'assuzione più forte. 
+
+Consiglio di eseguire questo snippet con proof-general per capirne meglio il motivo.
+
+#+begin_src coq :session *coq*
+  Theorem repeat_double_firsttry : forall c n: nat,
+    repeat n c ++ repeat n c = repeat n (c + c).
+  Proof.
+    intros c. induction c as [| c' IHc'].
+    - (* c = 0 *)
+      intros n. simpl. reflexivity.
+    - (* c = S c' *)
+      intros n. simpl.
+      (*  Now we seem to be stuck.  The IH cannot be used to
+          rewrite repeat n (c' + S c'): it only works
+          for repeat n (c' + c'). If the IH were more liberal here
+          (e.g., if it worked for an arbitrary second summand),
+          the proof would go through. *)
+  Abort.
+#+end_src
+
+Possiamo sbloccarci generalizzando l'assunzione come segue 
+
+#+begin_src coq :session *coq*
+Theorem repeat_plus: forall c1 c2 n: nat,
+    repeat n c1 ++ repeat n c2 = repeat n (c1 + c2).
+Proof.
+  intros c1 c2 n.
+  induction c1 as [| c1' IHc1'].
+  - simpl. reflexivity.
+  - simpl.
+    rewrite <- IHc1'.
+    reflexivity.
+  Qed.
+#+end_src
+
 
