@@ -751,7 +751,167 @@ In questa notazione della somma Rocq si rende conto che plus` "decresce sul prim
 
 * Induzione
 
-#TODO: Riscrivere
+#+begin_src coq :session *coq*
+From LF Require Export Basics.
+#+end_src
+
+Una dimostrazione semplice per la somma tra numeri naturali è la somma per zero, nel caso consideriamo lo zero a sinistra è banale per la costruzione stessa della somma, sul lato destro invece le cose si complicano.
+
+#+begin_src coq :session *coq*
+Theorem add_0_r_firsttry : forall n:nat,
+  n + 0 = n.
+Proof.
+  intros n.
+  simpl. (* Does nothing! *)
+Abort.
+#+end_src
+
+Potremmo provare ad usare ~destruct~ per provare a ragionare per casi su n ma non andiamo molto lontano, possiamo vedere che vale per ~n = 0~ senza difficoltà ma poi rimaniamo bloccati a ~n = S n'~ per qualche n' siccome non è possibile semplificare questa espressione utilizzando il matching della somma. Esattamente nello stesso modo di prima.
+
+#+begin_src coq :session *coq*
+Theorem add_0_r_secondtry : forall n:nat,
+  n + 0 = n.
+Proof.
+  intros n. destruct n as [| n'] eqn:E.
+  - (* n = 0 *)
+    reflexivity. (* so far so good... *)
+  - (* n = S n' *)
+    simpl. (* ...but here we are stuck again *)
+Abort.
+#+end_src
+ 
+Potremmo provare ~destruct n'~ per andare un pelo oltre, ma siccome n è arbitrariamente grande, potremmo non raggiungere mai una conclusione. Per dimostrare fatti su numeri naturali, liste e altri insiemi definiti ricorsivamente abbiamo bisogno del meccanismo dell' =induzione=.
+
+Ricordiamo il /principio di induzione sui numeri naturali/
+Per dimostrare che una proposizione =P(n)= vale per tutti i numeri naturali allora bisogna:
+- Mostrare che ~P(0)~ vale.
+- Mostrare che per ogni ~n'~ naturale, se ~P(n')~ vale allora che ~P(S n')~ vale.
+- Concludiamo quindi che ~P(n)~ vale per qualunque ~n~ naturale.
+
+In Rocq gli step sono uguali, solo che in genere gli incontriamo in ordine opposto. Iniziamo con l'obiettivo di provare ~P(n)~ per ogni n, applichiamo la tattica ~induction~ per rompere il goal in sottogoal (che sono gli step dell'induzione).
+
+#+begin_src coq *coq*
+Theorem add_0_r : forall n:nat, n + 0 = n.
+Proof.
+  intros n. induction n as [| n' IHn'].
+  - (* n = 0 *) reflexivity.
+  - (* n = S n' *) simpl. rewrite → IHn'. reflexivity. Qed.
+#+end_src
+
+Notiamo come ~destruct~ anche induction  usa le clausole dopo ~as~ questo serve a dare un nome alle variabili introdotte nei sottogoal. Usiamo una barra | perchè abbiamo due sottogoal, nel primo non ci interessa introdurre nuove variabili quindi rimane vuoto, mentre nel secondo introduciamo ~n'~ e l'*ipotesi induttiva stessa* ~IHn'~ che sta per "Inductive Hypothesis over n'". È sempre consigliato dare questi nomi siccome altrimenti Rocq prova a inventarseli e posso risultare confusionari.
+
+Nel primo sottogoal ~n~ è sostituito con ~0~, viene dimostrata la validità semplicemente con ~reflexivity~.
+Nel secondo sottogoal ~n~ è rimpiazzato da ~S n'~ e l'assunzione ~n' + 0 = n'~ è aggiunta al contesto con il nome ~IHn'~. Il goal diventa =S n' == (S n') + 0= che si semplifica a =S n' = S (n' + 0)=,  riscrivendo l'ipotesi =IHn'= otteniamo quindi un'identità, dimostrando il sottogoal.
+
+#+begin_src coq :session *coq*
+ Theorem minus_n_n : forall n,
+  minus n n = 0.
+Proof.
+  intros n. induction n as [| n' IHn'].
+  - (* n = 0 *)
+    simpl. reflexivity.
+  - (* n = S n' *)
+    simpl. rewrite → IHn'. reflexivity. Qed.
+#+end_src
+
+Notiamo che l'uso di ~intros n~ in queste dimostrazioni è ridondante in quanto ~induction~ si occupa di introdurre nel nostro contesto tutte le variabili necessarie per il goal corrente.
+
+** Dimostrazioni all'interno di dimostrazioni
+
+In Rocq come nelle definizioni informali, grandi dimostrazioni possono essere spezzettate in dimostrazioni più piccole intermedie che vengono poi riutilizzate per dimostrare il teorema più grosso. Spesso però queste asserzioni sono fatti semplici e banali oppure troppo generali che non si "meritano" un nome, in questi casi si può usare questo "fatto" necessario "in-place", per fare questo in Rocq usiamo la keyword ~replace~. (da non confondere con ~rewrite~)
+
+#+begin_src coq :session *coq*
+Theorem mult_0_plus' : forall n m : nat,
+  (n + 0 + 0) × m = n × m.
+Proof.
+  intros n m.
+  replace (n + 0 + 0) with n.
+  - reflexivity.
+  - rewrite add_comm. simpl. rewrite add_comm. reflexivity.
+Qed.
+
+#+end_src
+
+La tattica ~replace~ e1 with e2 genera due sottogoal, quello su cui invochiamo la ~replace~ con come differenza il fatto che =e1=  è ripiazzato da =e2= ed il sottogoal dell'uguaglianza stessa ~e1 = e2~.
+
+Come altro esempio possiamo provare ~(n + m) + (p + q) = (m + n) + (p + q)~, l'unica differenza tra le due parti  dell'uguaglianza ~=~ è che gli argomenti ~m~ ed ~n~ della prima addizione interna sono invertiti. In questo caso potremmo usare la commutatività dell'addizione tramite la ~rewrite add_com~, ma siccome ~rewrite~ in Rocq non è molto intelligente sul *dove* va applicata essa altera solo la somma /esterna/
+
+#+begin_src coq :session *coq*
+Theorem plus_rearrange_firsttry : forall n m p q : nat,
+  (n + m) + (p + q) = (m + n) + (p + q).
+Proof.
+  intros n m p q.
+  (* We just need to swap (n + m) for (m + n)... seems
+    like add_comm should do the trick! *)
+  rewrite add_comm.
+  (* Doesn't work... Rocq rewrites the wrong plus! :-( *)
+Abort.
+#+end_src
+
+Per usare ~add_comm~ esattamente dove vogliamo in questo caso torna utile il comando ~replace~ e poi *dimostrando il sottogoal generato* utilizzando ~rewrite add_comm~.
+
+#+begin_src coq :session *coq*
+Theorem plus_rearrange : forall n m p q : nat,
+  (n + m) + (p + q) = (m + n) + (p + q).
+Proof.
+  intros n m p q.
+  replace (n + m) with (m + n).
+  - reflexivity.
+  - rewrite add_comm. reflexivity.
+Qed.
+#+end_src
+
+** Dimostrazioni Formali vs Dimostrazioni Informali
+
+/Le dimostrazioni informali sono algoritmi; le dimostrazioni formali sono codice./
+
+Le dimostrazioni formali in Rocq sono precise ma difficili da capire per gli umani.
+Una dimostrazione informale scritta da un matematico comunica meglio le idee: spiega esplicitamente lo stato della dimostrazione ad ogni passo ("dobbiamo mostrare che...", "supponiamo che...") mentre la versione formale rende implicito il contesto e usa tattiche (come ~reflexivity~) che /nascondono i passaggi logici/. 
+Entrambe seguono la stessa struttura (induzione su n, caso base, caso induttivo) ma bilanciano diversamente esplicitezza e dettaglio.
+
+Non possiamo ignorare le dimostrazioni informali.
+
+Per Rocq questa è una dimostrazione valida, ma per un umano è difficile a prima vista da comprendere.
+#+begin_src coq :session *coq*
+Theorem add_assoc' : forall n m p : nat,
+  n + (m + p) = (n + m) + p.
+Proof. intros n m p. induction n as [| n' IHn']. reflexivity.
+  simpl. rewrite IHn'. reflexivity. Qed.
+#+end_src
+
+Possiamo aiutarci con dei commenti. Ma comunque se fosse un minimo più complicata sarebbe semplice perdere il filo del discorso.
+#+begin_src coq :session *coq*
+ Theorem add_assoc'' : forall n m p : nat,
+  n + (m + p) = (n + m) + p.
+Proof.
+  intros n m p. induction n as [| n' IHn'].
+  - (* n = 0 *)
+    reflexivity.
+  - (* n = S n' *)
+    simpl. rewrite IHn'. reflexivity. Qed.
+#+end_src
+
+Un matematico pignolo scriverebbe la dimostrazione in questo modo
+
+#+begin_quote
+Teorema: Per ogni n, m e p,
+          n + (m + p) = (n + m) + p.
+
+Dimostrazione. Per induzione su n.
+- Prima, supponiamo n = 0, dobbiamo mostrare che:
+                0 + (m + p) = (0 + m) + p.
+        Questo deriva direttamente dalla definizione di +.
+
+- Successivamente, supponiamo n = S n' , dove
+                n' + (m + p) = (n' + m) + p.
+        Dobbiamo mostrare che
+                (S n') + (m + p) = ((S n') + m) + p.
+        Per definizione di +, questo deriva da
+                S (n' + (m + p)) = S ((n' + m) + p),
+       che è immediato dall'ipotesi di induzione. Qed.
+#+end_quote
+
+La struttura generale è simile perché Rocq genera gli stessi sottoobiettivi nell'ordine degli elenchi puntati matematici. Tuttavia ci sono differenze nei dettagli: Rocq è più esplicito nell'uso di tattiche specifiche come ~reflexivity~, ma meno esplicito riguardo lo stato della dimostrazione che rimane implicito. Al contrario, la dimostrazione informale /ricorda esplicitamente al lettore dove si trova ad ogni passo/.
 
 * Liste
 
